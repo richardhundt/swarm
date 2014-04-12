@@ -1,0 +1,72 @@
+import async, yield from "async"
+import Channel from "async.util"
+
+import TCPClient, StreamReader from "async.io"
+import HTTPFilter, HTTPHeaders, HTTPRequest from "net.http"
+
+class RESTClient
+   self(host, port)
+      self.host   = host
+      self.port   = port
+      self.socket = TCPClient()
+      self.input  = Channel()
+      self.output = Channel()
+   end
+   connect(host = self.host, port = self.port)
+      ok, er = self.socket.connect(host, port)
+      if not ok then
+         return ok, er
+      end
+      self.connected = true
+      async =>
+         HTTPFilter(StreamReader(self.socket), self.output)
+         while true do
+            req = self.input.get()
+            if req == nil then
+               self.connected = false
+               break
+            end
+            buf = req.entity or ""
+            wrt = self.socket.write("%{req}%{buf}")
+            if wrt == 0LL or wrt == nil then
+               -- TODO: synthesise error response
+               break
+            end
+         end
+      end
+   end
+
+   get(...)
+      return self.send('GET', ...)
+   end
+   put(...)
+      return self.send('PUT', ...)
+   end
+   post(...)
+      return self.send('POST', ...)
+   end
+   delete(...)
+      return self.send('DELETE', ...)
+   end
+
+   send(verb, path, hdrs = { }, body)
+      if body and #body then
+         hdrs['Content-Length'] = #body
+      end
+      req = HTTPRequest(verb, path, hdrs as HTTPHeaders, body)
+      if not self.connected then
+         self.connect()
+      end
+      self.input.put(req)
+      return self.output.get()
+   end
+
+   close()
+      self.connected = false
+      self.socket.close()
+   end
+end
+
+export RESTClient
+
+

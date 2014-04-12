@@ -1,0 +1,28 @@
+import async from "async"
+import FileStream from "async.io"
+
+class HTTPStatic
+   
+   self(root)
+      self.root = root
+   end
+
+   open(path)
+      path = self.root ~ "/" ~ path
+      file = io::open(path, 'r')
+      if file then
+         return FileStream(file)
+      end
+      return nil
+   end
+
+   handler(req, args, query)
+      stream = self.open(Table::concat(args, '/'))
+      if stream then
+         return { 200, { }, stream }
+      else
+         return { 404, { }, { } }
+      end
+   end
+end
+

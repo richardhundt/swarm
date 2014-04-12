@@ -1,0 +1,152 @@
+import async, yield from "async"
+import Date from "util.time"
+
+import
+   TCPServer,
+   StreamReader,
+   AsyncStream
+from "async.io"
+
+import
+   HTTPFilter,
+   HTTPHeaders,
+   HTTPResponse,
+   HTTPEntity,
+   HTTPStatus
+from "net.http"
+
+import HTTPRouter from "swarm.router"
+
+import ByteArray from "data.buffer"
+
+class ServerError extends Error end
+
+class Logger
+   self(file = io::stderr)
+      self.file = AsyncStream(file)
+   end
+   log(mesg)
+      self.file.write("%{Date::timestamp()} %{mesg}")
+   end
+end
+
+class HTTPServer
+   import ffi, C from "sys.ffi"
+
+   self(config = { }, routes is HTTPRouter = HTTPRouter())
+      self.config = config
+      self.routes = routes
+      self.logger = config.logger or Logger()
+   end
+
+   client_request(client, req)
+      route, args, query = self.routes.match(req.method, req.path)
+      out = nil
+      if route then
+         out = route::handler(req, args, query)
+      else
+         return self.send_error(404, client, req.path, req)
+      end
+
+      given out
+         case { status, headers, body } then
+            headers = headers as HTTPHeaders
+            buf = [ ]
+            if body is AsyncStream then
+               -- TODO: chunked encoding
+               while true do
+                  got = body.read(4096)
+                  if got == nil then
+                     break
+                  end
+                  buf.push(got)
+               end
+            elseif body is Table then
+               for i=1, #body do
+                  buf.push(body[i])
+               end
+            end
+
+            buf = buf.join()
+            rsp = HTTPResponse(status, headers)
+
+            headers['Date'] = Date::timestamp()
+            headers['Server-Software'] = 'Swarm/0.1'
+            headers['Content-Length'] = #buf
+
+            wrt = client.write("%{rsp}%{buf}")
+            if wrt == 0LL or req.should_close() then
+               client.close()
+            end
+         else do
+            throw ServerError "bad application response"
+         end
+      end
+   end
+
+   send_error(code, client, mesg, req)
+      desc = HTTPStatus.message(code)
+      html = """
+<html>
+<body>
+<h1>Error %{code}: %{desc}</h1>
+<hr />
+<pre>%{mesg}</pre>
+</body>
+</html>
+"""
+
+      hdrs = {
+         ['Content-Type'] = 'text/html'
+         ['Content-Length'] = #html
+      }
+
+      rsp = HTTPResponse(code, hdrs as HTTPHeaders)
+      wrt = client.write("%{rsp}%{html}")
+      if wrt == 0LL or req.should_close() then
+         client.close()
+      end
+   end
+
+   client_connect(client)
+      async =>
+         filter = HTTPFilter(StreamReader(client, nil, 1024))
+         while true do
+            local req
+            try
+               req = filter.get()
+               if req == nil then
+                  client.close()
+                  break
+               end
+               self.client_request(client, req)
+            catch err then
+               self.send_error(500, client, err, req)
+            end
+         end
+      end
+   end
+
+   start()
+      C::signal(C::SIGPIPE, ffi::cast('sig_t', C::SIG_IGN))
+
+      { host = host, port = port } = self.config
+
+      self.server = TCPServer()
+      self.server.reuseaddr(true)
+      self.server.bind(host, port)
+      self.server.listen(128)
+
+      return async =>
+         print "server listening on http://%{host}:%{port}/"
+         while true do
+            client = self.server.accept()
+            self.client_connect(client)
+         end
+      end
+   end
+end
+
+export HTTPServer
+
+

@@ -1,0 +1,24 @@
+import HTTPServer from "swarm.server"
+
+module Controller
+   function self.__included(into)
+      into.server = HTTPServer()
+   end
+   start(host, port)
+      self.server.config['host'] = host
+      self.server.config['port'] = port
+      return self.server.start().join()
+   end
+   get routes()
+      return self.server.routes
+   end
+end
+
+function route(meth, verb, path)
+   recv = getfenv(meth).__self__
+   recv.routes.add verb, path, (...) =>
+      return meth(recv, ...)
+   end
+   return meth
+end
+

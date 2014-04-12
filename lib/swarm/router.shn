@@ -1,0 +1,60 @@
+
+class HTTPRouter
+   self()
+      self.routes = { }
+   end
+   add(verb is String, path is String, func is Function)
+      self.routes[#self.routes + 1] = Route(verb, path, func)
+   end
+   match(verb, path)
+      for i=#self.routes, 1, -1 do
+         m, q = self.routes[i].match(verb, path)
+         if m then
+            return self.routes[i], m, q
+         end
+      end
+   end
+
+   class Route
+      local frag_patt = / '/' %1 { [^/?]+ } /
+
+      self(verb, path, func)
+         self.handler = func
+         self.verb = verb
+         self.path = path
+         self.patt = / /
+         for frag in path.gmatch("(:?[^/]*)") do
+            if frag == '' then
+               continue
+            end
+            if frag[1] == ':' then
+               -- named path parameter
+               name = frag[2..-1]
+               self.patt *= frag_patt % (a, v) =>
+                  a[name] = v
+               end
+            else 
+               -- literal match
+               self.patt *= / '/' <{frag}> /
+            end
+         end
+
+         -- collect the remaining path fragments
+         self.patt *= / <{frag_patt}> -> (a, v) =>
+            a[#a + 1] = v
+         end / ** 0
+
+         -- collect the remaining query part
+         self.patt *= / %1 ('/'? {.+})? /
+      end
+
+      match(verb, path)
+         if self.verb != verb then
+            return nil
+         end
+         return self.patt.match(path, 1, { })
+      end
+   end
+end
+
+

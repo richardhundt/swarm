@@ -1,0 +1,87 @@
+class HTMLFrag
+   self(kids = [ ])
+      self.children = kids
+   end
+   __tostring__()
+      return self.children.join()
+   end
+end
+
+class HTMLText
+   self(value = "")
+      self.value = value
+   end
+   __tostring__()
+      return self.value
+   end
+end
+
+class HTMLElement
+   self(name is String, atts is Table = { }, kids is Array = [ ])
+      self.name       = name
+      self.attributes = atts
+      self.children   = kids
+   end
+   __tostring__()
+      atts = [ ]
+      for k, v in self.attributes do
+         atts.push("%{k}=%q".format(v))
+      end
+      if #atts > 0 then
+         atts = " %{atts.join(' ')}"
+      else
+         atts = ""
+      end
+      kids = self.children.join('')
+      return "<%{self.name}%{atts}>%{kids}</%{self.name}>"
+   end
+end
+
+class HTMLBuilder
+   self(frag = HTMLFrag())
+      self.frag = frag
+      self.curr = frag
+   end
+
+   text(value)
+      node = HTMLText(value)
+      self.curr.children.push(node)
+      return node
+   end
+
+   element(name, atts, body)
+      if atts is Function then
+         body = atts
+         atts = { }
+      end
+      elmt = HTMLElement(name, atts)
+
+      if typeof(body) == Function then
+         save = self.curr
+         self.curr = elmt
+         body(elmt)
+         self.curr = save
+      end
+
+      self.curr.children.push(elmt)
+      return elmt
+   end
+
+   tags = """
+   a abbr address article aside audio b bdi bdo blockquote body button
+   canvas caption cite code colgroup datalist dd del details dfn div dl dt em
+   fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 head header hgroup
+   html i iframe ins kbd label legend li map mark menu meter nav noscript object
+   ol optgroup option output p pre progress q rp rt ruby s samp script section
+   select small span strong style sub summary sup table tbody td textarea tfoot
+   th thead time title tr u ul video area base br col command embed hr img input
+   keygen link meta param source track wbr
+   """.split()
+   
+   for i, name in tags do
+      self.__members__[name] = (self, atts, body) =>
+         return self.element(name, atts, body)
+      end
+   end
+end
+
