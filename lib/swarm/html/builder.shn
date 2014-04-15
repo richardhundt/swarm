@@ -56,7 +56,7 @@ class HTMLBuilder
       end
       elmt = HTMLElement(name, atts)
 
-      if typeof(body) == Function then
+      if body is Function then
          save = self.curr
          self.curr = elmt
          body(elmt)

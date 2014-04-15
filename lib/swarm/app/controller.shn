@@ -1,5 +1,0 @@
-module Controller
-   function self.__included(into)
-
-   end
-end

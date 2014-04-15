@@ -1,8 +1,10 @@
-import async from "async"
+import async      from "async"
 import FileStream from "async.io"
+import HTTPTypes  from "swarm.types"
 
 class HTTPStatic
-   
+   types = HTTPTypes()
+
    self(root)
       self.root = root
    end
@@ -17,9 +19,18 @@ class HTTPStatic
    end
 
    handler(req, args, query)
-      stream = self.open(Table::concat(args, '/'))
+      path = table::concat(args, '/')
+      extn = path.match('%.([^.]-)$')
+      type = nil
+      if extn then
+         type = types.guess(extn)
+         if type then
+            type = type[1]
+         end
+      end
+      stream = self.open(path)
       if stream then
-         return { 200, { }, stream }
+         return { 200, { ['Content-Type'] = type }, stream }
       else
          return { 404, { }, { } }
       end

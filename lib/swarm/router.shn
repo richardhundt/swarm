@@ -1,4 +1,6 @@
 
+import URI from "net.uri"
+
 class HTTPRouter
    self()
       self.routes = { }
@@ -45,7 +47,7 @@ class HTTPRouter
          end / ** 0
 
          -- collect the remaining query part
-         self.patt *= / %1 ('/'? {.+})? /
+         self.patt *= / %1 ('/'? {.+} -> (q) => URI::decode(q))? /
       end
 
       match(verb, path)

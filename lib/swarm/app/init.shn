@@ -1,24 +1,82 @@
 import HTTPServer from "swarm.server"
 
-module Controller
-   function self.__included(into)
-      into.server = HTTPServer()
+class Swarm
+   self(name)
+      self.name = name
+      self.config = { }
+      self.server = HTTPServer()
    end
-   start(host, port)
+   route(verb, path)
+      if verb is String then
+         verb = { verb }
+      end
+      return function(func)
+         for i=1, #verb do
+            self.server.routes.add(verb[i], path, func)
+         end
+         return func
+      end
+   end
+   run(host = 'localhost', port = 8000)
       self.server.config['host'] = host
       self.server.config['port'] = port
       return self.server.start().join()
    end
-   get routes()
-      return self.server.routes
+end
+
+module Presenter
+   local server = HTTPServer()
+
+   route(verb, path)
+      if verb is String then
+         verb = { verb }
+      end
+      return function(meth)
+         for i=1, #verb do
+            server.routes.add(verb[i], path, (...) =>
+               return meth(self, ...)
+            end)
+         end
+         return meth
+      end
+   end
+
+   run(host = 'localhost', port = 8000)
+      server.config['host'] = host
+      server.config['port'] = port
+      return server.start().join()
    end
 end
 
-function route(meth, verb, path)
-   recv = getfenv(meth).__self__
-   recv.routes.add verb, path, (...) =>
-      return meth(recv, ...)
+class Config
+   store = { }
+   __set__(path, val)
+      found = store
+      frags = path.split '%.'
+      for i=1, #frags - 1 do
+         key = frags[i]
+         if found[key] == nil then
+            found[key] = { }
+         end
+         found = found[key]
+      end
+      found[frags[#frags]] = val
    end
-   return meth
+   __get__(path)
+      found = store
+      frags = path.split '%.'
+      for i=1, #frags - 1 do
+         key = frags[i]
+         if found[key] != nil then
+            found = found[key]
+         else
+            return nil
+         end
+      end
+      return found[frags[#frags]]
+   end
 end
+
+-- singleton
+Config = Config()
 
